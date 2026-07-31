@@ -1,0 +1,16 @@
+{
+  "users": [
+    {
+      "username": "masteradmin",
+      "passwordHash": "50d95e2543ee1089433d2b4419d2c71b6a3285e7315d2f7663ca25ac23b8dd0a",
+      "role": "master",
+      "createdAt": "2026-07-31T00:00:00.000Z"
+    },
+    {
+      "username": "admin",
+      "passwordHash": "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f",
+      "role": "editor",
+      "createdAt": "2026-07-31T00:00:00.000Z"
+    }
+  ]
+}

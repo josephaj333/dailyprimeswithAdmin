@@ -1,0 +1,9 @@
+# ads.txt
+# This file is for AdSense and other ad network verification
+# Replace with your actual Google AdSense account information
+
+# Google AdSense
+google.com, pub-8544354064796718, DIRECT, f08c47fec0942fa0
+
+# Add more ad networks here as needed
+# Format: domain, account-id, account-type, tag-id
