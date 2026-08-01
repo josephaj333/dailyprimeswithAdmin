@@ -7,7 +7,7 @@ function initialFormState() {
   return {
     id: '',
     title: '',
-    image: '/images/profilepic.jpg',
+    image: '',
     youtubeVideoUrl: '',
     description: '',
     content: '',
@@ -23,7 +23,7 @@ function initialUserForm() {
 }
 
 function isManagedUpload(image) {
-  return typeof image === 'string' && image.startsWith('/uploads/');
+  return typeof image === 'string' && (image.startsWith('/uploads/') || image.startsWith('http'));
 }
 
 export default function AdminDashboard({ username }) {
@@ -38,21 +38,92 @@ export default function AdminDashboard({ username }) {
   const [pendingImage, setPendingImage] = useState(null);
   const [imagePreview, setImagePreview] = useState('/images/profilepic.jpg');
   const [imageToDelete, setImageToDelete] = useState('');
+  const [defaultStoryImage, setDefaultStoryImage] = useState('/images/profilepic.jpg');
+  const [defaultImagePreview, setDefaultImagePreview] = useState('/images/profilepic.jpg');
+  const [pendingDefaultImage, setPendingDefaultImage] = useState(null);
 
   useEffect(() => {
     fetchPosts();
     fetchUsers();
+    fetchSettings();
   }, []);
+
+  async function fetchSettings() {
+    const response = await fetch('/api/settings');
+    if (!response.ok) {
+      if (response.status === 401) {
+        router.push('/admin/login');
+        return;
+      }
+      try {
+        const txt = await response.text();
+        setStatus(`Failed to load settings: ${txt}`);
+      } catch (e) {
+        setStatus('Failed to load settings.');
+      }
+      return;
+    }
+
+    let data;
+    try {
+      data = await response.json();
+    } catch (e) {
+      setStatus('Invalid settings response from server.');
+      return;
+    }
+
+    const imagePath = data.defaultStoryImage || '/images/profilepic.jpg';
+    setDefaultStoryImage(imagePath);
+    setDefaultImagePreview(imagePath);
+  }
 
   async function fetchPosts() {
     const response = await fetch('/api/posts');
-    const data = await response.json();
+    if (!response.ok) {
+      try {
+        const txt = await response.text();
+        setStatus(`Failed to load posts: ${txt}`);
+      } catch (e) {
+        setStatus('Failed to load posts.');
+      }
+      return;
+    }
+
+    let data;
+    try {
+      data = await response.json();
+    } catch (e) {
+      setStatus('Invalid posts response from server.');
+      return;
+    }
+
     setPosts(data.posts || []);
   }
 
   async function fetchUsers() {
     const response = await fetch('/api/auth/users');
-    const data = await response.json();
+    if (!response.ok) {
+      if (response.status === 401) {
+        router.push('/admin/login');
+        return;
+      }
+      try {
+        const txt = await response.text();
+        setStatus(`Failed to load users: ${txt}`);
+      } catch (e) {
+        setStatus('Failed to load users.');
+      }
+      return;
+    }
+
+    let data;
+    try {
+      data = await response.json();
+    } catch (e) {
+      setStatus('Invalid users response from server.');
+      return;
+    }
+
     const userList = data.users || [];
     setUsers(userList);
     const me = userList.find((user) => user.username === username);
@@ -71,7 +142,7 @@ export default function AdminDashboard({ username }) {
 
   function startNewStory() {
     setFormState(initialFormState());
-    setImagePreview('/images/profilepic.jpg');
+    setImagePreview(defaultStoryImage);
     setPendingImage(null);
     setImageToDelete('');
     setStatus('Creating a new story. Fill in the fields and save.');
@@ -79,7 +150,7 @@ export default function AdminDashboard({ username }) {
 
   function editStory(post) {
     setFormState(post);
-    setImagePreview(post.image || '/images/profilepic.jpg');
+    setImagePreview(post.image || defaultStoryImage);
     setPendingImage(null);
     setImageToDelete('');
     setStatus(`Editing story: ${post.title}`);
@@ -94,17 +165,80 @@ export default function AdminDashboard({ username }) {
       const base64Content = reader.result.split(',')[1];
       setPendingImage({ fileName: file.name, contentBase64: base64Content });
       setImagePreview(reader.result);
-      setFormState((prev) => ({ ...prev, image: `/uploads/${file.name}` }));
+      setFormState((prev) => ({ ...prev, image: '' }));
       setStatus('Image selected, save the story to upload the image.');
     };
     reader.readAsDataURL(file);
   }
 
+  async function uploadDefaultImage(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64Content = reader.result.split(',')[1];
+      setPendingDefaultImage({ fileName: file.name, contentBase64: base64Content });
+      setDefaultImagePreview(reader.result);
+      setStatus('Default image selected. Save it to update the site default.');
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function saveDefaultImage() {
+    if (!pendingDefaultImage) {
+      setStatus('Select a default image first.');
+      return;
+    }
+
+    try {
+      const imagePath = await uploadMediaFile(pendingDefaultImage);
+      const response = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ defaultStoryImage: imagePath }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Failed to save default story image.');
+      }
+
+      const data = await response.json();
+      setDefaultStoryImage(data.defaultStoryImage);
+      setDefaultImagePreview(data.defaultStoryImage);
+      setPendingDefaultImage(null);
+      setStatus('Default story image updated successfully.');
+    } catch (error) {
+      setStatus(error.message);
+    }
+  }
+
+  async function uploadMediaFile(fileData) {
+    const response = await fetch('/api/media', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(fileData),
+    });
+
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.message || 'Image upload failed');
+    }
+
+    const data = await response.json();
+    return data.path;
+  }
+
   async function removeImage() {
     if (pendingImage) {
       setPendingImage(null);
-      setImagePreview('/images/profilepic.jpg');
-      setFormState((prev) => ({ ...prev, image: '/images/profilepic.jpg' }));
+      setImagePreview(defaultStoryImage);
+      setFormState((prev) => ({ ...prev, image: '' }));
       setStatus('Image selection canceled.');
       return;
     }
@@ -113,8 +247,8 @@ export default function AdminDashboard({ username }) {
       setImageToDelete(formState.image);
     }
 
-    setFormState((prev) => ({ ...prev, image: '/images/profilepic.jpg' }));
-    setImagePreview('/images/profilepic.jpg');
+    setFormState((prev) => ({ ...prev, image: '' }));
+    setImagePreview(defaultStoryImage);
     setStatus('Image removed. Save story to apply the change.');
   }
 
@@ -153,6 +287,9 @@ export default function AdminDashboard({ username }) {
       if (pendingImage) {
         imagePath = await uploadPendingImage();
       }
+      if (!imagePath || imagePath === '/images/profilepic.jpg') {
+        imagePath = defaultStoryImage;
+      }
 
       const body = {
         ...formState,
@@ -185,7 +322,7 @@ export default function AdminDashboard({ username }) {
       setImageToDelete('');
       setStatus('Story saved successfully.');
       setFormState(initialFormState());
-      setImagePreview('/images/profilepic.jpg');
+      setImagePreview(defaultStoryImage);
       fetchPosts();
     } catch (error) {
       setIsSaving(false);
@@ -214,7 +351,7 @@ export default function AdminDashboard({ username }) {
 
     setStatus('Story deleted successfully.');
     setFormState(initialFormState());
-    setImagePreview('/images/profilepic.jpg');
+    setImagePreview(defaultStoryImage);
     setPendingImage(null);
     setImageToDelete('');
     fetchPosts();
@@ -320,22 +457,27 @@ export default function AdminDashboard({ username }) {
       </div>
 
       {status ? <div className="alert" style={{ marginTop: '1rem' }}>{status}</div> : null}
+      {posts.length > 20 ? (
+        <div className="alert" style={{ marginTop: '1rem' }}>
+          Number of stories is exceeding the limit please delete old and irrelevant stories.
+        </div>
+      ) : null}
 
       <div className="grid" style={{ gridTemplateColumns: '1fr 1.6fr', gap: '1.5rem', marginTop: '2rem' }}>
         <aside>
           <div className="card" style={{ marginBottom: '1.5rem' }}>
             <h2 className="card-title">Users</h2>
             <div>
-              <div style={{ marginBottom: '1rem' }}>
+              <div className="field">
                 <label htmlFor="newUsername">Username</label>
-                <input id="newUsername" name="username" value={userForm.username} onChange={handleUserChange} />
+                <input id="newUsername" type="text" name="username" value={userForm.username} onChange={handleUserChange} />
               </div>
-              <div style={{ marginBottom: '1rem' }}>
+              <div className="field">
                 <label htmlFor="newPassword">Password</label>
                 <input id="newPassword" name="password" type="password" value={userForm.password} onChange={handleUserChange} />
               </div>
               {userRole === 'master' ? (
-                <div style={{ marginBottom: '1rem' }}>
+                <div className="field">
                   <label htmlFor="newRole">Role</label>
                   <select id="newRole" name="role" value={userForm.role} onChange={handleUserChange}>
                     <option value="editor">editor</option>
@@ -349,6 +491,24 @@ export default function AdminDashboard({ username }) {
             </div>
           </div>
 
+          {userRole === 'master' ? (
+            <div className="card" style={{ marginBottom: '1.5rem' }}>
+              <h2 className="card-title">Default Story Image</h2>
+              <div className="field">
+                <label>Current Default Image</label>
+                <img src={defaultImagePreview} alt="Default story image" style={{ width: '100%', maxWidth: 320, borderRadius: 18, objectFit: 'cover' }} />
+              </div>
+              <div className="field">
+                <label htmlFor="defaultImageUpload">Upload New Default Image</label>
+                <input id="defaultImageUpload" type="file" accept="image/*" onChange={uploadDefaultImage} />
+                <small>Upload a new default image for stories that don't include a photo.</small>
+              </div>
+              <button type="button" className="button" onClick={saveDefaultImage} disabled={!pendingDefaultImage}>
+                Save Default Image
+              </button>
+            </div>
+          ) : null}
+
           <div className="card">
             <h2 className="card-title">All Users</h2>
             {users.length === 0 ? (
@@ -359,11 +519,11 @@ export default function AdminDashboard({ username }) {
                   <h3 className="card-title" style={{ marginBottom: '0.5rem' }}>{user.username}</h3>
                   <p className="card-text">Role: {user.role}</p>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                    {(user.username === username || userRole === 'master') && (
-                      <button type="button" className="btn btn-secondary" onClick={() => resetUserPassword(user.username)}>
-                        Reset Password
-                      </button>
-                    )}
+                      {(user.username === username || (userRole === 'master' && (username === 'masteradmin' || user.username !== 'masteradmin'))) && (
+                        <button type="button" className="btn btn-secondary" onClick={() => resetUserPassword(user.username)}>
+                          Reset Password
+                        </button>
+                      )}
                     {userRole === 'master' && user.username !== 'masteradmin' ? (
                       <button type="button" className="btn btn-secondary" onClick={() => deleteUserAccount(user.username)}>
                         Delete User
@@ -404,7 +564,7 @@ export default function AdminDashboard({ username }) {
 
               <div className="field">
                 <label htmlFor="youtubeVideoUrl">YouTube Embed URL</label>
-                <input id="youtubeVideoUrl" name="youtubeVideoUrl" value={formState.youtubeVideoUrl} onChange={handleChange} />
+                <input id="youtubeVideoUrl" name="youtubeVideoUrl" value={formState.youtubeVideoUrl} onChange={handleChange} placeholder="https://www.youtube.com/embed/..." />
                 <small>Example: https://www.youtube.com/embed/dQw4w9WgXcQ</small>
               </div>
 

@@ -30,7 +30,11 @@ export default function PostPage({ post }) {
 
           {post.youtubeVideoUrl ? (
             <div className="post-actions">
-              <button className="btn btn-youtube btn-lg" onClick={() => setShowVideo(true)}>
+              <button
+                className="btn btn-youtube btn-lg"
+                onClick={() => window.location.href = post.youtubeVideoUrl}
+                type="button"
+              >
                 <i className="fab fa-youtube"></i> Watch
               </button>
             </div>

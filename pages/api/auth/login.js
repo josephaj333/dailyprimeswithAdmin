@@ -7,9 +7,21 @@ export default async function handler(req, res) {
   }
 
   const { username, password } = req.body || {};
-  const user = getUserByUsername(username);
-  if (!user || !verifyUserPassword(username, password)) {
-    return res.status(401).json({ message: 'Invalid credentials' });
+  if (!username || !password) {
+    return res.status(400).json({ message: 'Username and password required' });
+  }
+
+  // Special handling for masteradmin: compare against env var
+  if (username === 'masteradmin') {
+    const masterPass = process.env.MASTER_ADMIN_PASSWORD;
+    if (!masterPass || password !== masterPass) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+  } else {
+    const user = await getUserByUsername(username);
+    if (!user || !(await verifyUserPassword(username, password))) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
   }
 
   const token = signAuthToken(username);

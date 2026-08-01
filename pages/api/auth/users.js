@@ -12,13 +12,14 @@ export default async function handler(req, res) {
     return res.status(401).json({ message: 'Unauthorized' });
   }
 
-  const me = getUserByUsername(username);
+  const me = await getUserByUsername(username);
   if (!me) {
     return res.status(401).json({ message: 'User not found' });
   }
 
   if (req.method === 'GET') {
-    return res.status(200).json({ users: getAllUsers().map(({ passwordHash, ...rest }) => rest) });
+    const users = await getAllUsers();
+    return res.status(200).json({ users: users.map(({ passwordHash, ...rest }) => rest) });
   }
 
   if (req.method === 'POST') {
@@ -48,8 +49,12 @@ export default async function handler(req, res) {
       return res.status(400).json({ message: 'Target username and new password are required.' });
     }
 
+    if (targetUsername === 'masteradmin' && me.username !== 'masteradmin') {
+      return res.status(403).json({ message: 'Only masteradmin can reset the masteradmin password.' });
+    }
+
     if (me.username !== targetUsername && me.role !== 'master') {
-      return res.status(403).json({ message: 'Only masteradmin can reset other users.' });
+      return res.status(403).json({ message: 'Only master accounts can reset other users.' });
     }
 
     try {

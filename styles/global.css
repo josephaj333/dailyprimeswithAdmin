@@ -240,7 +240,8 @@ iframe {
 }
 
 .field input,
-.field textarea {
+.field textarea,
+.field select {
   width: 100%;
   min-height: 48px;
   padding: 0.95rem 1rem;
@@ -248,6 +249,10 @@ iframe {
   border: 1px solid rgba(255,255,255,0.1);
   background: #090909;
   color: var(--text);
+}
+
+.field select {
+  appearance: none;
 }
 
 .field textarea {

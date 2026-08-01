@@ -1,6 +1,7 @@
 import Head from 'next/head';
 import Script from 'next/script';
 import Link from 'next/link';
+import { useState } from 'react';
 import { getAllPosts } from '../lib/posts';
 
 const truncateText = (text, maxLength = 140) => {
@@ -10,6 +11,13 @@ const truncateText = (text, maxLength = 140) => {
 
 export default function Home({ posts }) {
   const latestPosts = posts; // show all posts on homepage
+  const [visibleCount, setVisibleCount] = useState(9);
+  const visiblePosts = latestPosts.slice(0, visibleCount);
+  const hasMoreStories = visibleCount < latestPosts.length;
+
+  const handleShowMore = () => {
+    setVisibleCount((prev) => Math.min(prev + 9, latestPosts.length));
+  };
 
   return (
     <>
@@ -104,8 +112,8 @@ export default function Home({ posts }) {
           </div>
 
           <div className="blog-grid">
-            {latestPosts.length > 0 ? (
-              latestPosts.map((post) => (
+            {visiblePosts.length > 0 ? (
+              visiblePosts.map((post) => (
                 <article
                   key={post.id}
                   className="blog-card"
@@ -146,6 +154,13 @@ export default function Home({ posts }) {
               </div>
             )}
           </div>
+          {hasMoreStories ? (
+            <div style={{ textAlign: 'center', marginTop: '2rem' }}>
+              <button type="button" className="button" onClick={handleShowMore}>
+                Show more stories
+              </button>
+            </div>
+          ) : null}
         </div>
       </section>
 

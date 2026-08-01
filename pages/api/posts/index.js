@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { parseCookies, verifyAuthToken } from '../../../lib/auth';
 import { generatePostId } from '../../../lib/posts';
+import { getSettings } from '../../../lib/settings';
 import { createOrUpdateGitHubFile, deleteGitHubFile, getGitHubFile, listGitHubPostFiles } from '../../../lib/github';
 
 const postsDirectory = path.join(process.cwd(), 'data', 'posts');
@@ -68,10 +69,13 @@ export default async function handler(req, res) {
       return res.status(400).json({ message: 'Missing required story fields' });
     }
 
+    const settings = await getSettings();
+    const defaultImage = settings.defaultStoryImage || '/images/profilepic.jpg';
     const newPost = {
       ...post,
       id: post.id || generatePostId(post.title),
       date: post.date || new Date().toISOString(),
+      image: post.image && post.image !== '/images/profilepic.jpg' ? post.image : defaultImage,
     };
 
     if (useGitHub) {
@@ -111,11 +115,17 @@ export default async function handler(req, res) {
         }
         await deleteGitHubFile(filePath, existing.sha, `Delete story ${id}`);
 
-        if (image && image.startsWith('/uploads/')) {
-          const imagePath = `public${image}`;
-          const existingImage = await getGitHubFile(imagePath);
-          if (existingImage) {
-            await deleteGitHubFile(imagePath, existingImage.sha, `Delete image ${image}`);
+        // attempt to delete associated image via media API
+        if (image) {
+          try {
+            const origin = req.headers.origin || `http://${req.headers.host}`;
+            await fetch(`${origin}/api/media`, {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ imagePath: image }),
+            });
+          } catch (e) {
+            console.error('Failed to delete associated image:', e);
           }
         }
 
@@ -132,10 +142,16 @@ export default async function handler(req, res) {
     }
 
     fs.unlinkSync(filePath);
-    if (image && image.startsWith('/uploads/')) {
-      const imagePath = path.join(process.cwd(), 'public', image);
-      if (fs.existsSync(imagePath)) {
-        fs.unlinkSync(imagePath);
+    if (image) {
+      try {
+        const origin = req.headers.origin || `http://${req.headers.host}`;
+        await fetch(`${origin}/api/media`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imagePath: image }),
+        });
+      } catch (e) {
+        console.error('Failed to delete associated image:', e);
       }
     }
 

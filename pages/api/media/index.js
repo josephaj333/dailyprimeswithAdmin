@@ -1,27 +1,25 @@
-import fs from 'fs';
-import path from 'path';
 import { parseCookies, verifyAuthToken } from '../../../lib/auth';
 import { getGitHubFile, createOrUpdateGitHubBinaryFile, deleteGitHubFile } from '../../../lib/github';
-
-const uploadDirectory = path.join(process.cwd(), 'public', 'uploads');
+import { put, remove } from '@vercel/blob';
+import path from 'path';
+import fs from 'fs';
 
 function requireAuth(req) {
   const cookies = parseCookies(req.headers.cookie || '');
   return verifyAuthToken(cookies.dp_auth);
 }
 
-function ensureUploadDirectory() {
-  if (!fs.existsSync(uploadDirectory)) {
-    fs.mkdirSync(uploadDirectory, { recursive: true });
-  }
-}
-
 function sanitizeFileName(filename) {
   return filename.replace(/[^a-zA-Z0-9._-]/g, '-').replace(/-+/g, '-');
 }
 
-function managedImagePath(imagePath) {
-  return typeof imagePath === 'string' && imagePath.startsWith('/uploads/');
+function isUrl(str) {
+  try {
+    new URL(str);
+    return true;
+  } catch (e) {
+    return false;
+  }
 }
 
 export default async function handler(req, res) {
@@ -30,8 +28,6 @@ export default async function handler(req, res) {
     return res.status(401).json({ message: 'Unauthorized' });
   }
 
-  const useGitHub = Boolean(process.env.GITHUB_TOKEN);
-
   if (req.method === 'POST') {
     const { fileName, contentBase64 } = req.body || {};
     if (!fileName || !contentBase64) {
@@ -39,17 +35,22 @@ export default async function handler(req, res) {
     }
 
     const safeFileName = sanitizeFileName(fileName);
-    const repoPath = `public/uploads/${safeFileName}`;
-    const publicPath = `/uploads/${safeFileName}`;
 
     try {
-      if (useGitHub) {
-        await createOrUpdateGitHubBinaryFile(repoPath, contentBase64, `Upload image ${safeFileName}`);
-      } else {
-        ensureUploadDirectory();
-        fs.writeFileSync(path.join(uploadDirectory, safeFileName), Buffer.from(contentBase64, 'base64'));
-      }
-      return res.status(200).json({ path: publicPath });
+      // Use Vercel Blob to store binary data and return a public URL
+      const buffer = Buffer.from(contentBase64, 'base64');
+      const blob = await put({ name: safeFileName, data: buffer }).catch(async (err) => {
+        // Fallback: if @vercel/blob is not configured, attempt GitHub storage if token available
+        if (process.env.GITHUB_TOKEN) {
+          const repoPath = `public/uploads/${safeFileName}`;
+          await createOrUpdateGitHubBinaryFile(repoPath, contentBase64, `Upload image ${safeFileName}`);
+          return { url: `https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY || `${process.env.GITHUB_OWNER}/${process.env.GITHUB_REPO_NAME}`}/main/${repoPath}` };
+        }
+        throw err;
+      });
+
+      const publicUrl = blob.url || blob?.href || blob?.downloadUrl;
+      return res.status(200).json({ path: publicUrl });
     } catch (error) {
       console.error(error);
       return res.status(500).json({ message: 'Failed to upload image.' });
@@ -58,24 +59,36 @@ export default async function handler(req, res) {
 
   if (req.method === 'DELETE') {
     const { imagePath } = req.body || {};
-    if (!imagePath || !managedImagePath(imagePath)) {
+    if (!imagePath) {
       return res.status(400).json({ message: 'Invalid image path.' });
     }
 
-    const repoPath = `public${imagePath}`;
-
     try {
-      if (useGitHub) {
-        const existing = await getGitHubFile(repoPath);
-        if (existing) {
-          await deleteGitHubFile(repoPath, existing.sha, `Delete image ${repoPath}`);
-        }
+      if (isUrl(imagePath)) {
+        // try to extract filename from URL
+        const url = new URL(imagePath);
+        const fileName = path.basename(url.pathname);
+        await remove({ name: fileName }).catch(async (err) => {
+          if (process.env.GITHUB_TOKEN) {
+            const repoPath = `public/uploads/${fileName}`;
+            const existing = await getGitHubFile(repoPath);
+            if (existing) await deleteGitHubFile(repoPath, existing.sha, `Delete image ${repoPath}`);
+          } else {
+            // nothing else we can do
+          }
+        });
       } else {
-        const localPath = path.join(process.cwd(), 'public', imagePath);
-        if (fs.existsSync(localPath)) {
-          fs.unlinkSync(localPath);
-        }
+        // imagePath may be a repo path like /uploads/name
+        const fileName = path.basename(imagePath);
+        await remove({ name: fileName }).catch(async (err) => {
+          if (process.env.GITHUB_TOKEN) {
+            const repoPath = `public/uploads/${fileName}`;
+            const existing = await getGitHubFile(repoPath);
+            if (existing) await deleteGitHubFile(repoPath, existing.sha, `Delete image ${repoPath}`);
+          }
+        });
       }
+
       return res.status(200).json({});
     } catch (error) {
       console.error(error);

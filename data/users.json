@@ -11,6 +11,19 @@
       "passwordHash": "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f",
       "role": "editor",
       "createdAt": "2026-07-31T00:00:00.000Z"
+    },
+    {
+      "username": "qwerty",
+      "passwordHash": "daaad6e5604e8e17bd9f108d91e26afe6281dac8fda0091040a7a6d7bd9b43b5",
+      "role": "master",
+      "createdAt": "2026-08-01T05:24:46.024Z",
+      "updatedAt": "2026-08-01T05:25:41.077Z"
+    },
+    {
+      "username": "qq",
+      "passwordHash": "d5ce2b19fbda14a25deac948154722f33efd37b369a32be8f03ec2be8ef7d3a5",
+      "role": "master",
+      "createdAt": "2026-08-01T06:37:08.915Z"
     }
   ]
 }
