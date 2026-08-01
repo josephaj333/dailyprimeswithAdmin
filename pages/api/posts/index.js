@@ -2,6 +2,7 @@ import { parseCookies, verifyAuthToken } from '../../../lib/auth';
 import { generatePostId } from '../../../lib/posts';
 import { getSettings } from '../../../lib/settings';
 import { supabase } from '../../../lib/supabaseClient';
+import { del } from '@vercel/blob';
 
 function requireAuth(req) {
   const cookies = parseCookies(req.headers.cookie || '');
@@ -91,12 +92,36 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'DELETE') {
-    const { id, image } = req.body || {};
+    const { id } = req.body || {};
     if (!id) {
       return res.status(400).json({ message: 'Post id is required' });
     }
 
     try {
+      const { data: story, error: fetchError } = await supabase
+        .from('stories')
+        .select('image_url')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (fetchError) {
+        console.error('Supabase fetch story image error:', fetchError);
+        return res.status(500).json({ message: 'Unable to load story image.' });
+      }
+
+      const imageUrl = story?.image_url;
+
+      if (imageUrl) {
+        try {
+          const blobName = new URL(imageUrl).pathname.split('/').pop();
+          if (blobName) {
+            await del({ name: blobName });
+          }
+        } catch (deleteError) {
+          console.error('Failed to delete Vercel Blob image:', deleteError);
+        }
+      }
+
       const { data, error } = await supabase.from('stories').delete().eq('id', id).select();
       if (error) {
         console.error('Supabase DELETE story error:', error);
@@ -105,19 +130,6 @@ export default async function handler(req, res) {
 
       if (!data || (Array.isArray(data) && data.length === 0)) {
         return res.status(404).json({ message: 'Post not found' });
-      }
-
-      if (image) {
-        try {
-          const origin = req.headers.origin || `http://${req.headers.host}`;
-          await fetch(`${origin}/api/media`, {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ imagePath: image }),
-          });
-        } catch (e) {
-          console.error('Failed to delete associated image:', e);
-        }
       }
 
       return res.status(200).json({ message: 'Deleted' });
