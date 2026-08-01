@@ -95,7 +95,7 @@ export default function Home({ posts }) {
                 loop
                 playsInline
                 preload="auto"
-                poster="/images/droneshow.jpg"
+                poster="/images/defaultfootball.png"
                 width="420"
                 height="420"
                 className="hero-video"

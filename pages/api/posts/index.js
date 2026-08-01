@@ -111,7 +111,7 @@ export default async function handler(req, res) {
 
       const imageUrl = story?.image_url;
 
-      if (imageUrl) {
+      if (imageUrl && imageUrl.includes('blob.vercel.com') && !imageUrl.startsWith('/')) {
         try {
           const blobName = new URL(imageUrl).pathname.split('/').pop();
           if (blobName) {
@@ -119,6 +119,7 @@ export default async function handler(req, res) {
           }
         } catch (deleteError) {
           console.error('Failed to delete Vercel Blob image:', deleteError);
+          console.error('Failed blob URL:', imageUrl);
         }
       }
 
