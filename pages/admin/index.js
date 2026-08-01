@@ -72,7 +72,7 @@ export default function AdminDashboard({ username }) {
       return;
     }
 
-    const imagePath = data.defaultStoryImage || '/images/profilepic.jpg';
+    const imagePath = data.default_image_url || '/images/profilepic.jpg';
     setDefaultStoryImage(imagePath);
     setDefaultImagePreview(imagePath);
   }
@@ -194,11 +194,11 @@ export default function AdminDashboard({ username }) {
     try {
       const imagePath = await uploadMediaFile(pendingDefaultImage);
       const response = await fetch('/api/settings', {
-        method: 'PATCH',
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ defaultStoryImage: imagePath }),
+        body: JSON.stringify({ default_image_url: imagePath }),
       });
 
       if (!response.ok) {
@@ -207,8 +207,8 @@ export default function AdminDashboard({ username }) {
       }
 
       const data = await response.json();
-      setDefaultStoryImage(data.defaultStoryImage);
-      setDefaultImagePreview(data.defaultStoryImage);
+      setDefaultStoryImage(data.default_image_url);
+      setDefaultImagePreview(data.default_image_url);
       setPendingDefaultImage(null);
       setStatus('Default story image updated successfully.');
     } catch (error) {

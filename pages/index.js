@@ -1,7 +1,7 @@
 import Head from 'next/head';
 import Script from 'next/script';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
 const truncateText = (text, maxLength = 140) => {
@@ -12,6 +12,23 @@ const truncateText = (text, maxLength = 140) => {
 export default function Home({ posts }) {
   const latestPosts = posts; // show all posts on homepage
   const [visibleCount, setVisibleCount] = useState(9);
+  const [defaultStoryImage, setDefaultStoryImage] = useState('/images/profilepic.jpg');
+
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        const response = await fetch('/api/settings');
+        if (!response.ok) return;
+        const data = await response.json();
+        setDefaultStoryImage(data.default_image_url || '/images/profilepic.jpg');
+      } catch (error) {
+        console.error('Failed to load default story image:', error);
+      }
+    }
+
+    loadSettings();
+  }, []);
+
   const visiblePosts = latestPosts.slice(0, visibleCount);
   const hasMoreStories = visibleCount < latestPosts.length;
 
@@ -123,7 +140,12 @@ export default function Home({ posts }) {
                   onKeyDown={(e) => { if (e.key === 'Enter') window.location.href = `/post/${post.id}` }}
                 >
                   <div className="blog-image">
-                    <img src={post.image || '/images/profilepic.jpg'} srcSet={`${post.image || '/images/profilepic.jpg'} 400w`} alt={post.title} loading="lazy" />
+                    <img
+                      src={post.image || defaultStoryImage || '/images/profilepic.jpg'}
+                      srcSet={`${post.image || defaultStoryImage || '/images/profilepic.jpg'} 400w`}
+                      alt={post.title}
+                      loading="lazy"
+                    />
                     <span className="blog-badge">Latest</span>
                   </div>
                   <div className="blog-content">
