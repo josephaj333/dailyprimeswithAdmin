@@ -319,25 +319,27 @@ export default function Home({ posts }) {
   );
 }
 
-export async function getStaticProps() {
+export async function getServerSideProps() {
   try {
-    const { data, error } = await supabase.from('stories').select('*');
+    const { data, error } = await supabase
+      .from('stories')
+      .select('*')
+      .order('created_at', { ascending: false });
+
     if (error) {
       console.error('Supabase story fetch error:', error);
       return { props: { posts: [] } };
     }
 
-    const posts = (Array.isArray(data) ? data : [])
-      .map((row) => ({
-        id: row.id,
-        title: row.title,
-        description: row.description,
-        content: row.content,
-        image: row.image_url || '/images/profilepic.jpg',
-        youtubeVideoUrl: row.youtube_url || '',
-        date: row.created_at || new Date().toISOString(),
-      }))
-      .sort((a, b) => new Date(b.date) - new Date(a.date));
+    const posts = (Array.isArray(data) ? data : []).map((row) => ({
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      content: row.content,
+      image: row.image_url || '/images/profilepic.jpg',
+      youtubeVideoUrl: row.youtube_url || '',
+      date: row.created_at || new Date().toISOString(),
+    }));
 
     return {
       props: {
