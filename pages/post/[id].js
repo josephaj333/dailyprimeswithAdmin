@@ -70,28 +70,14 @@ export default function PostPage({ post }) {
   );
 }
 
-export async function getStaticPaths() {
+export async function getServerSideProps({ params }) {
   try {
-    const { data, error } = await supabase.from('stories').select('id');
-    if (error) {
-      console.error('Supabase story path fetch error:', error);
-      return { paths: [], fallback: false };
-    }
+    const { data, error } = await supabase
+      .from('stories')
+      .select('*')
+      .eq('id', params.id)
+      .single();
 
-    const posts = Array.isArray(data) ? data : [];
-    return {
-      paths: posts.map((post) => ({ params: { id: post.id } })),
-      fallback: false,
-    };
-  } catch (error) {
-    console.error('Failed to load story paths:', error);
-    return { paths: [], fallback: false };
-  }
-}
-
-export async function getStaticProps({ params }) {
-  try {
-    const { data, error } = await supabase.from('stories').select('*').eq('id', params.id).single();
     if (error) {
       console.error('Supabase story fetch error:', error);
       return { props: { post: null } };
