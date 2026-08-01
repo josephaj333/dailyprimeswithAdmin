@@ -2,7 +2,6 @@ import { parseCookies, verifyAuthToken } from '../../../lib/auth';
 import { getGitHubFile, createOrUpdateGitHubBinaryFile, deleteGitHubFile } from '../../../lib/github';
 import { put, remove } from '@vercel/blob';
 import path from 'path';
-import fs from 'fs';
 
 function requireAuth(req) {
   const cookies = parseCookies(req.headers.cookie || '');
@@ -35,24 +34,14 @@ export default async function handler(req, res) {
     }
 
     const safeFileName = sanitizeFileName(fileName);
+    const buffer = Buffer.from(contentBase64, 'base64');
 
     try {
-      // Use Vercel Blob to store binary data and return a public URL
-      const buffer = Buffer.from(contentBase64, 'base64');
-      const blob = await put({ name: safeFileName, data: buffer }).catch(async (err) => {
-        // Fallback: if @vercel/blob is not configured, attempt GitHub storage if token available
-        if (process.env.GITHUB_TOKEN) {
-          const repoPath = `public/uploads/${safeFileName}`;
-          await createOrUpdateGitHubBinaryFile(repoPath, contentBase64, `Upload image ${safeFileName}`);
-          return { url: `https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY || `${process.env.GITHUB_OWNER}/${process.env.GITHUB_REPO_NAME}`}/main/${repoPath}` };
-        }
-        throw err;
-      });
-
+      const blob = await put(`uploads/${safeFileName}`, buffer, { access: 'public' });
       const publicUrl = blob.url || blob?.href || blob?.downloadUrl;
-      return res.status(200).json({ path: publicUrl });
+      return res.status(200).json({ url: publicUrl });
     } catch (error) {
-      console.error(error);
+      console.error('Vercel Blob upload failed:', error);
       return res.status(500).json({ message: 'Failed to upload image.' });
     }
   }
