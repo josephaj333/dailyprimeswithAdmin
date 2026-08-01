@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { getAllPosts, getPostById } from '../../lib/posts';
 import ReactMarkdown from 'react-markdown';
 import Link from 'next/link';
+import { supabase } from '../../lib/supabaseClient';
 
 export default function PostPage({ post }) {
   const [showVideo, setShowVideo] = useState(false);
@@ -71,18 +71,47 @@ export default function PostPage({ post }) {
 }
 
 export async function getStaticPaths() {
-  const posts = getAllPosts();
-  return {
-    paths: posts.map((post) => ({ params: { id: post.id } })),
-    fallback: false,
-  };
+  try {
+    const { data, error } = await supabase.from('stories').select('id');
+    if (error) {
+      console.error('Supabase story path fetch error:', error);
+      return { paths: [], fallback: false };
+    }
+
+    const posts = Array.isArray(data) ? data : [];
+    return {
+      paths: posts.map((post) => ({ params: { id: post.id } })),
+      fallback: false,
+    };
+  } catch (error) {
+    console.error('Failed to load story paths:', error);
+    return { paths: [], fallback: false };
+  }
 }
 
 export async function getStaticProps({ params }) {
-  const post = getPostById(params.id);
-  return {
-    props: {
-      post: post || null,
-    },
-  };
+  try {
+    const { data, error } = await supabase.from('stories').select('*').eq('id', params.id).single();
+    if (error) {
+      console.error('Supabase story fetch error:', error);
+      return { props: { post: null } };
+    }
+
+    const post = data
+      ? {
+          id: data.id,
+          title: data.title,
+          description: data.description,
+          content: data.content,
+          image: data.image_url || '/images/profilepic.jpg',
+          youtubeVideoUrl: data.youtube_url || '',
+          date: data.created_at || new Date().toISOString(),
+        }
+      : null;
+
+    return { props: { post } };
+  } catch (error) {
+    console.error('Failed to load story:', error);
+    return { props: { post: null } };
+  }
 }

@@ -39,7 +39,10 @@ export default async function handler(req, res) {
     try {
       const blob = await put(`uploads/${safeFileName}`, buffer, { access: 'public', addRandomSuffix: true });
       const publicUrl = blob.url || blob?.href || blob?.downloadUrl;
-      return res.status(200).json({ url: publicUrl });
+      if (!publicUrl) {
+        throw new Error('Missing blob public URL');
+      }
+      return res.status(200).json({ path: publicUrl, url: publicUrl });
     } catch (error) {
       console.error('Vercel Blob upload failed:', error);
       return res.status(500).json({ message: 'Failed to upload image.' });

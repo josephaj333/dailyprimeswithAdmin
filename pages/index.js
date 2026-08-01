@@ -2,7 +2,7 @@ import Head from 'next/head';
 import Script from 'next/script';
 import Link from 'next/link';
 import { useState } from 'react';
-import { getAllPosts } from '../lib/posts';
+import { supabase } from '../lib/supabaseClient';
 
 const truncateText = (text, maxLength = 140) => {
   if (!text) return '';
@@ -123,7 +123,7 @@ export default function Home({ posts }) {
                   onKeyDown={(e) => { if (e.key === 'Enter') window.location.href = `/post/${post.id}` }}
                 >
                   <div className="blog-image">
-                    <img src={post.image} srcSet={`${post.image} 400w`} alt={post.title} loading="lazy" />
+                    <img src={post.image || '/images/profilepic.jpg'} srcSet={`${post.image || '/images/profilepic.jpg'} 400w`} alt={post.title} loading="lazy" />
                     <span className="blog-badge">Latest</span>
                   </div>
                   <div className="blog-content">
@@ -298,10 +298,36 @@ export default function Home({ posts }) {
 }
 
 export async function getStaticProps() {
-  const posts = getAllPosts();
-  return {
-    props: {
-      posts,
-    },
-  };
+  try {
+    const { data, error } = await supabase.from('stories').select('*');
+    if (error) {
+      console.error('Supabase story fetch error:', error);
+      return { props: { posts: [] } };
+    }
+
+    const posts = (Array.isArray(data) ? data : [])
+      .map((row) => ({
+        id: row.id,
+        title: row.title,
+        description: row.description,
+        content: row.content,
+        image: row.image_url || '/images/profilepic.jpg',
+        youtubeVideoUrl: row.youtube_url || '',
+        date: row.created_at || new Date().toISOString(),
+      }))
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    return {
+      props: {
+        posts,
+      },
+    };
+  } catch (error) {
+    console.error('Failed to load stories:', error);
+    return {
+      props: {
+        posts: [],
+      },
+    };
+  }
 }
