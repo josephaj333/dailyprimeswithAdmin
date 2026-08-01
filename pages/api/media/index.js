@@ -37,7 +37,7 @@ export default async function handler(req, res) {
     const buffer = Buffer.from(contentBase64, 'base64');
 
     try {
-      const blob = await put(`uploads/${safeFileName}`, buffer, { access: 'public' });
+      const blob = await put(`uploads/${safeFileName}`, buffer, { access: 'public', addRandomSuffix: true });
       const publicUrl = blob.url || blob?.href || blob?.downloadUrl;
       return res.status(200).json({ url: publicUrl });
     } catch (error) {
