@@ -1,11 +1,7 @@
-import fs from 'fs';
-import path from 'path';
 import { parseCookies, verifyAuthToken } from '../../../lib/auth';
 import { generatePostId } from '../../../lib/posts';
 import { getSettings } from '../../../lib/settings';
-import { createOrUpdateGitHubFile, deleteGitHubFile, getGitHubFile, listGitHubPostFiles } from '../../../lib/github';
-
-const postsDirectory = path.join(process.cwd(), 'data', 'posts');
+import { supabase } from '../../../lib/supabaseClient';
 
 function requireAuth(req) {
   const cookies = parseCookies(req.headers.cookie || '');
@@ -13,36 +9,16 @@ function requireAuth(req) {
   return username;
 }
 
-function ensureLocalPostsDirectory() {
-  if (!fs.existsSync(postsDirectory)) {
-    fs.mkdirSync(postsDirectory, { recursive: true });
-  }
-}
-
-function writeLocalPostFile(post) {
-  ensureLocalPostsDirectory();
-  const id = post.id || generatePostId(post.title);
-  const fullPost = {
-    ...post,
-    id,
-    date: post.date || new Date().toISOString(),
+function mapStoryRow(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    content: row.content,
+    image: row.image_url || '/images/profilepic.jpg',
+    youtubeVideoUrl: row.youtube_url || '',
+    date: row.created_at || new Date().toISOString(),
   };
-  const filePath = path.join(postsDirectory, `${id}.json`);
-  fs.writeFileSync(filePath, JSON.stringify(fullPost, null, 2), 'utf8');
-  return fullPost;
-}
-
-function readLocalPosts() {
-  if (!fs.existsSync(postsDirectory)) {
-    return [];
-  }
-
-  const fileNames = fs.readdirSync(postsDirectory).filter((file) => file.endsWith('.json'));
-  return fileNames.map((fileName) => {
-    const filePath = path.join(postsDirectory, fileName);
-    const fileContents = fs.readFileSync(filePath, 'utf8');
-    return JSON.parse(fileContents);
-  });
 }
 
 export default async function handler(req, res) {
@@ -51,12 +27,19 @@ export default async function handler(req, res) {
     return res.status(401).json({ message: 'Unauthorized' });
   }
 
-  const useGitHub = Boolean(process.env.GITHUB_TOKEN);
-
   if (req.method === 'GET') {
     try {
-      const posts = useGitHub ? await listGitHubPostFiles() : readLocalPosts();
-      return res.status(200).json({ posts: posts.sort((a, b) => new Date(b.date) - new Date(a.date)) });
+      const { data, error } = await supabase.from('stories').select('*');
+      if (error) {
+        console.error('Supabase GET stories error:', error);
+        return res.status(500).json({ message: 'Unable to load stories.' });
+      }
+
+      const stories = (Array.isArray(data) ? data : [])
+        .map(mapStoryRow)
+        .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+      return res.status(200).json({ posts: stories });
     } catch (error) {
       console.error(error);
       return res.status(500).json({ message: 'Unable to load stories.' });
@@ -64,39 +47,46 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    const post = req.body;
-    if (!post || !post.title || !post.description || !post.content) {
+    const post = req.body || {};
+    const { title, description, content, image, youtubeVideoUrl, id: incomingId } = post;
+
+    if (!title || !description || !content) {
       return res.status(400).json({ message: 'Missing required story fields' });
     }
 
     const settings = await getSettings();
     const defaultImage = settings.defaultStoryImage || '/images/profilepic.jpg';
-    const newPost = {
-      ...post,
-      id: post.id || generatePostId(post.title),
-      date: post.date || new Date().toISOString(),
-      image: post.image && post.image !== '/images/profilepic.jpg' ? post.image : defaultImage,
-    };
-
-    if (useGitHub) {
-      try {
-        const filePath = `data/posts/${newPost.id}.json`;
-        const existing = await getGitHubFile(filePath);
-        const message = existing ? `Update story ${newPost.id}` : `Create story ${newPost.id}`;
-        const response = await createOrUpdateGitHubFile(filePath, JSON.stringify(newPost, null, 2), message, existing?.sha);
-        return res.status(200).json({ post: newPost, github: response.content });
-      } catch (error) {
-        console.error(error);
-        return res.status(500).json({ message: 'Unable to save story via GitHub API.' });
-      }
-    }
+    const storyId = incomingId || generatePostId(title);
+    const createdAt = post.created_at || new Date().toISOString();
+    const imageUrl = image && image !== '/images/profilepic.jpg' ? image : defaultImage;
 
     try {
-      const savedPost = writeLocalPostFile(newPost);
-      return res.status(200).json({ post: savedPost });
+      const { data, error } = await supabase
+        .from('stories')
+        .upsert(
+          {
+            id: storyId,
+            title,
+            description,
+            content,
+            image_url: imageUrl,
+            youtube_url: youtubeVideoUrl || '',
+            created_at: createdAt,
+          },
+          { onConflict: 'id' }
+        )
+        .select();
+
+      if (error) {
+        console.error('Supabase POST story error:', error);
+        return res.status(500).json({ message: 'Unable to create story.' });
+      }
+
+      const saved = Array.isArray(data) ? data[0] : data;
+      return res.status(200).json({ post: mapStoryRow(saved) });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({ message: 'Unable to save story locally.' });
+      return res.status(500).json({ message: 'Unable to create story.' });
     }
   }
 
@@ -106,56 +96,35 @@ export default async function handler(req, res) {
       return res.status(400).json({ message: 'Post id is required' });
     }
 
-    if (useGitHub) {
-      try {
-        const filePath = `data/posts/${id}.json`;
-        const existing = await getGitHubFile(filePath);
-        if (!existing) {
-          return res.status(404).json({ message: 'Post not found' });
-        }
-        await deleteGitHubFile(filePath, existing.sha, `Delete story ${id}`);
-
-        // attempt to delete associated image via media API
-        if (image) {
-          try {
-            const origin = req.headers.origin || `http://${req.headers.host}`;
-            await fetch(`${origin}/api/media`, {
-              method: 'DELETE',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ imagePath: image }),
-            });
-          } catch (e) {
-            console.error('Failed to delete associated image:', e);
-          }
-        }
-
-        return res.status(200).json({ message: 'Deleted' });
-      } catch (error) {
-        console.error(error);
-        return res.status(500).json({ message: 'Unable to delete story via GitHub API.' });
+    try {
+      const { data, error } = await supabase.from('stories').delete().eq('id', id).select();
+      if (error) {
+        console.error('Supabase DELETE story error:', error);
+        return res.status(500).json({ message: 'Unable to delete story.' });
       }
-    }
 
-    const filePath = path.join(postsDirectory, `${id}.json`);
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ message: 'Post not found' });
-    }
-
-    fs.unlinkSync(filePath);
-    if (image) {
-      try {
-        const origin = req.headers.origin || `http://${req.headers.host}`;
-        await fetch(`${origin}/api/media`, {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imagePath: image }),
-        });
-      } catch (e) {
-        console.error('Failed to delete associated image:', e);
+      if (!data || (Array.isArray(data) && data.length === 0)) {
+        return res.status(404).json({ message: 'Post not found' });
       }
-    }
 
-    return res.status(200).json({ message: 'Deleted' });
+      if (image) {
+        try {
+          const origin = req.headers.origin || `http://${req.headers.host}`;
+          await fetch(`${origin}/api/media`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ imagePath: image }),
+          });
+        } catch (e) {
+          console.error('Failed to delete associated image:', e);
+        }
+      }
+
+      return res.status(200).json({ message: 'Deleted' });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ message: 'Unable to delete story.' });
+    }
   }
 
   return res.status(405).json({ message: 'Method not allowed' });
