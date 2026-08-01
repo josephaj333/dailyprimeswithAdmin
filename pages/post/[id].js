@@ -89,7 +89,7 @@ export async function getServerSideProps({ params }) {
           title: data.title,
           description: data.description,
           content: data.content,
-          image: data.image_url || '/images/profilepic.jpg',
+          image: data.image_url || '/images/defaultfootball.png',
           youtubeVideoUrl: data.youtube_url || '',
           date: data.created_at || new Date().toISOString(),
         }

@@ -16,7 +16,7 @@ function mapStoryRow(row) {
     title: row.title,
     description: row.description,
     content: row.content,
-    image: row.image_url || '/images/profilepic.jpg',
+    image: row.image_url || '/images/defaultfootball.png',
     youtubeVideoUrl: row.youtube_url || '',
     date: row.created_at || new Date().toISOString(),
   };
@@ -56,10 +56,10 @@ export default async function handler(req, res) {
     }
 
     const settings = await getSettings();
-    const defaultImage = settings.defaultStoryImage || '/images/profilepic.jpg';
+    const defaultImage = settings.defaultStoryImage || '/images/defaultfootball.png';
     const storyId = incomingId || generatePostId(title);
     const createdAt = post.created_at || new Date().toISOString();
-    const imageUrl = image && image !== '/images/profilepic.jpg' ? image : defaultImage;
+    const imageUrl = image && image !== '/images/defaultfootball.png' ? image : defaultImage;
 
     try {
       const { data, error } = await supabase

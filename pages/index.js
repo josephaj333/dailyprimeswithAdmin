@@ -12,7 +12,7 @@ const truncateText = (text, maxLength = 140) => {
 export default function Home({ posts }) {
   const latestPosts = posts; // show all posts on homepage
   const [visibleCount, setVisibleCount] = useState(9);
-  const [defaultStoryImage, setDefaultStoryImage] = useState('/images/profilepic.jpg');
+  const [defaultStoryImage, setDefaultStoryImage] = useState('/images/defaultfootball.png');
 
   useEffect(() => {
     async function loadSettings() {
@@ -20,7 +20,7 @@ export default function Home({ posts }) {
         const response = await fetch('/api/settings');
         if (!response.ok) return;
         const data = await response.json();
-        setDefaultStoryImage(data.default_image_url || '/images/profilepic.jpg');
+        setDefaultStoryImage(data.default_image_url || '/images/defaultfootball.png');
       } catch (error) {
         console.error('Failed to load default story image:', error);
       }
@@ -141,8 +141,8 @@ export default function Home({ posts }) {
                 >
                   <div className="blog-image">
                     <img
-                      src={post.image || defaultStoryImage || '/images/profilepic.jpg'}
-                      srcSet={`${post.image || defaultStoryImage || '/images/profilepic.jpg'} 400w`}
+                      src={post.image || defaultStoryImage || '/images/defaultfootball.png'}
+                      srcSet={`${post.image || defaultStoryImage || '/images/defaultfootball.png'} 400w`}
                       alt={post.title}
                       loading="lazy"
                     />
@@ -336,7 +336,7 @@ export async function getServerSideProps() {
       title: row.title,
       description: row.description,
       content: row.content,
-      image: row.image_url || '/images/profilepic.jpg',
+      image: row.image_url || '/images/defaultfootball.png',
       youtubeVideoUrl: row.youtube_url || '',
       date: row.created_at || new Date().toISOString(),
     }));

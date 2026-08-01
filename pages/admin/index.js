@@ -36,10 +36,10 @@ export default function AdminDashboard({ username }) {
   const [status, setStatus] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [pendingImage, setPendingImage] = useState(null);
-  const [imagePreview, setImagePreview] = useState('/images/profilepic.jpg');
+  const [imagePreview, setImagePreview] = useState('/images/defaultfootball.png');
   const [imageToDelete, setImageToDelete] = useState('');
-  const [defaultStoryImage, setDefaultStoryImage] = useState('/images/profilepic.jpg');
-  const [defaultImagePreview, setDefaultImagePreview] = useState('/images/profilepic.jpg');
+  const [defaultStoryImage, setDefaultStoryImage] = useState('/images/defaultfootball.png');
+  const [defaultImagePreview, setDefaultImagePreview] = useState('/images/defaultfootball.png');
   const [pendingDefaultImage, setPendingDefaultImage] = useState(null);
 
   useEffect(() => {
@@ -72,7 +72,7 @@ export default function AdminDashboard({ username }) {
       return;
     }
 
-    const imagePath = data.default_image_url || '/images/profilepic.jpg';
+    const imagePath = data.default_image_url || '/images/defaultfootball.png';
     setDefaultStoryImage(imagePath);
     setDefaultImagePreview(imagePath);
   }
@@ -287,7 +287,7 @@ export default function AdminDashboard({ username }) {
       if (pendingImage) {
         imagePath = await uploadPendingImage();
       }
-      if (!imagePath || imagePath === '/images/profilepic.jpg') {
+      if (!imagePath || imagePath === '/images/defaultfootball.png') {
         imagePath = defaultStoryImage;
       }
 
